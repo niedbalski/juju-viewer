@@ -10,12 +10,12 @@ gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk
 from gi.repository import GLib
 from gi.repository import Gdk
-from gi.repository import GdkPixbuf
 
 _HERE = os.path.abspath(os.path.dirname(__file__))
 logger = logging.getLogger(__name__)
 
 from juju import ListMachinesThread
+from machine import Machine
 
 
 class MainWindowHandlers(object):
@@ -48,9 +48,10 @@ class MainWindow(object):
         self.builder = Gtk.Builder()
         self.builder.add_from_file(self.UI_DEFINITION_FILE)
         self.builder.connect_signals(MainWindowHandlers(self))
-        self.machines.set_size_request(200, 200)
 
         self.hydrate_environments()
+        self.setup_machines_treeview()
+
         self.window.show_all()
 
     @property
@@ -66,24 +67,24 @@ class MainWindow(object):
         return self.builder.get_object("machines")
 
     @property
+    def services(self):
+        return self.builder.get_object("services")
+
+    @property
     def environments(self):
         return self.builder.get_object("environments")
 
-    def _get_state_pixbuf(self, state):
-        status_image_map = {
-            'started': "state-green.png",
-            'error': "state-red.png",
-            'pending': "state-yellow.png",
-            'down': "state-red.png",
-        }
+    def setup_services_treeview(self):
+        for index, column_name in enumerate(Machine.get_column_names()):
+            self.services.append_column(
+                Machine.get_column_by_name(column_name, index))
 
-        fpath = os.path.join(_HERE, 'ui', 'pixmaps',
-                             status_image_map.get(state, 'error'))
-
-        return GdkPixbuf.Pixbuf.new_from_file(fpath)
+    def setup_machines_treeview(self):
+        for index, column_name in enumerate(Machine.get_column_names()):
+            self.machines.append_column(
+                Machine.get_column_by_name(column_name, index))
 
     def get_juju_environments(self):
-
         def is_juju_initiated():
             return os.path.exists(self.DEFAULT_JUJU_ENV_FILE)
 
@@ -105,50 +106,23 @@ class MainWindow(object):
             envs_store.append([environment, environment])
 
         self.environments.set_model(envs_store)
-        self.environments.set_entry_text_column(0)
-        self.environments.set_active(0)
+        # self.environments.set_entry_text_column(0)
+        # self.environments.set_active(0)
 
     def on_status_error(self, e, v):
         print e, v
 
-    def set_column_headers(self, machines):
-        for machine in machines.values():
-            i = 0
-            for attr in machine.keys():
-                column = Gtk.TreeViewColumn(attr)
-                cell = Gtk.CellRendererText()
-                column.pack_start(cell, False)
-                column.add_attribute(cell, "text", i)
-                self.machines.append_column(column)
-                i = i + 1
-            break
-
-    def on_status(self, t, status):
+    def on_status(self, t, machines):
         """
         Callback invoked when the machines list is updated
         """
         self.notebook.set_sensitive(True)
+        model = Gtk.ListStore(*(Machine.get_column_types()))
 
-        machines = status.get('Machines', None)
-
-        if not machines:
-            #XXX: Handle this
-            self.log.debug('No machines found')
-
-        columns = self.machines.get_n_columns()
-
-        if columns == 0:
-            self.set_column_headers(machines)
-
-        model = Gtk.ListStore(*([str for i in range(0,
-                                 self.machines.get_n_columns())]))
-
-        for machine in machines.values():
+        for machine in machines:
             row = []
-            for attr, value in machine.items():
-                if value in ('', {}):
-                    value = None
-                row.append(str(value))
+            for column in Machine.get_column_names():
+                row.append(getattr(machine, column))
             model.append(row)
 
         self.machines.set_model(model)

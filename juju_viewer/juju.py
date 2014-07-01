@@ -4,6 +4,7 @@ from gi.repository import GObject
 from gi.repository import Gdk
 
 from jujuclient import Environment
+from machine import Machine
 
 
 class ListMachinesThread(threading.Thread, GObject.GObject):
@@ -26,8 +27,15 @@ class ListMachinesThread(threading.Thread, GObject.GObject):
         Gdk.threads_enter()
         try:
             env = Environment.connect(self.environment)
+            status = env.status()
+
+            machines = status.get('Machines', None).values()
+            r = []
+            for machine in machines:
+                r.append(Machine(machine))
+
             self.emit('on_status',
-                      env.status())
+                      r)
 
         except Exception as ex:
             self.emit('on_status_error', ex)
