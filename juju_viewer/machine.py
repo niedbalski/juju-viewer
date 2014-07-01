@@ -51,8 +51,10 @@ class Machine(object):
             'pending': "state-yellow.png",
             'down': "state-red.png",
         }
+
         fpath = os.path.join(_HERE, 'ui', 'pixmaps',
-                             status_image_map.get(state, 'error'))
+                             status_image_map.get(state,
+                                                  'state-yellow.png'))
 
         return GdkPixbuf.Pixbuf.new_from_file(fpath)
 
