@@ -8,22 +8,26 @@ from gi.repository import GdkPixbuf
 
 _HERE = os.path.abspath(os.path.dirname(__file__))
 
-from collections import OrderedDict
-
 
 class Machine(object):
 
     MACHINE_COLUMNS = {"Hardware": {'type': str},
                        "Life": {'type': str},
                        "Err": {'type': str},
-                       "InstanceId": {'type': str},
+                       "InstanceId": {
+                           'type': str,
+                           'index': 1,
+                       },
                        "AgentState": {
                            "type": GdkPixbuf.Pixbuf,
                            "renderer": Gtk.CellRendererPixbuf(),
-                           "index": 1
+                           "index": 2,
                        },
                        "AgentStateInfo": {'type': str},
-                       "DNSName": {'type': str},
+                       "DNSName": {
+                           'type': str,
+                           'index': 0,
+                       },
                        "AgentVersion": {'type': str},
                        "Series": {'type': str},
                        "Id": {'type': str, "index": 0},

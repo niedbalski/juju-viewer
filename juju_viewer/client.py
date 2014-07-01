@@ -6,6 +6,25 @@ from gi.repository import Gdk
 from jujuclient import Environment
 from machine import Machine
 
+import yaml
+import os
+
+DEFAULT_JUJU_ENV_FILE = os.path.expanduser("~/.juju/environments.yaml")
+
+
+def is_juju_initiated(env_path):
+    return os.path.exists(env_path)
+
+
+def get_environments(env_path=None):
+    if not env_path:
+        env_path = DEFAULT_JUJU_ENV_FILE
+    if not is_juju_initiated(env_path):
+        raise Exception(
+            "Juju has not been initiated yet, run 'juju init' before")
+
+    return yaml.load(open(env_path))
+
 
 class ListMachinesThread(threading.Thread, GObject.GObject):
 
@@ -27,15 +46,14 @@ class ListMachinesThread(threading.Thread, GObject.GObject):
         Gdk.threads_enter()
         try:
             env = Environment.connect(self.environment)
+
             status = env.status()
-
             machines = status.get('Machines', None).values()
-            r = []
+            results = []
             for machine in machines:
-                r.append(Machine(machine))
+                results.append(Machine(machine))
 
-            self.emit('on_status',
-                      r)
+            self.emit('on_status', results)
 
         except Exception as ex:
             self.emit('on_status_error', ex)

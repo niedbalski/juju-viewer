@@ -1,7 +1,6 @@
 import logging
 import os
 import gi
-import yaml
 import sys
 import signal
 
@@ -14,14 +13,21 @@ from gi.repository import Gdk
 _HERE = os.path.abspath(os.path.dirname(__file__))
 logger = logging.getLogger(__name__)
 
-from juju import ListMachinesThread
 from machine import Machine
+
+import client
 
 
 class MainWindowHandlers(object):
 
     def __init__(self, window):
         self.window = window
+
+    def on_environments_refresh_clicked(self, widget):
+        self.window.setup_environments()
+
+    def on_add_machine_clicked_cb(self, widget):
+        self.window.add_machine.show()
 
     def on_environments_changed(self, widget):
         (iterator, model) = (widget.get_active_iter(),
@@ -31,7 +37,7 @@ class MainWindowHandlers(object):
         if environment is None:
             raise Exception("Environment is not defined")
 
-        t = ListMachinesThread(environment)
+        t = client.ListMachinesThread(environment)
         t.connect("on_status", self.window.on_status)
         t.connect("on_status_error", self.window.on_status_error)
         t.start()
@@ -40,7 +46,6 @@ class MainWindowHandlers(object):
 class MainWindow(object):
 
     UI_DEFINITION_FILE = os.path.join(_HERE, 'ui', 'main.glade')
-    DEFAULT_JUJU_ENV_FILE = os.path.expanduser("~/.juju/environments.yaml")
 
     def __init__(self):
         self.log = logging.getLogger(self.__class__.__name__)
@@ -49,8 +54,9 @@ class MainWindow(object):
         self.builder.add_from_file(self.UI_DEFINITION_FILE)
         self.builder.connect_signals(MainWindowHandlers(self))
 
-        self.hydrate_environments()
+        self.setup_environments()
         self.setup_machines_treeview()
+        self.setup_services_treeview()
 
         self.window.show_all()
 
@@ -65,6 +71,10 @@ class MainWindow(object):
     @property
     def machines(self):
         return self.builder.get_object("machines")
+
+    @property
+    def add_machine(self):
+        return self.builder.get_object("add_machine_dialog")
 
     @property
     def services(self):
@@ -84,41 +94,28 @@ class MainWindow(object):
             self.machines.append_column(
                 Machine.get_column_by_name(column_name, index))
 
-    def get_juju_environments(self):
-        def is_juju_initiated():
-            return os.path.exists(self.DEFAULT_JUJU_ENV_FILE)
-
-        if not is_juju_initiated():
-            return self.__error(
-                "Juju has not been initiated yet, run 'juju init' before")
-
-        return yaml.load(open(
-            self.DEFAULT_JUJU_ENV_FILE))
-
-    def hydrate_environments(self):
-        """
-        Hydrate the enviroments list store
+    def setup_environments(self):
+        """Hydrate the enviroments list store
         """
         envs_store = Gtk.ListStore(str, str)
 
-        for environment in self.get_juju_environments().get(
+        logger.info("Updating enviroments")
+        for environment in client.get_environments().get(
                 'environments').keys():
             envs_store.append([environment, environment])
+            logger.info("Added environment: %s" % environment)
 
         self.environments.set_model(envs_store)
-        # self.environments.set_entry_text_column(0)
-        # self.environments.set_active(0)
 
     def on_status_error(self, e, v):
         print e, v
 
     def on_status(self, t, machines):
-        """
-        Callback invoked when the machines list is updated
+        """Callback invoked when the machines list is updated
         """
         self.notebook.set_sensitive(True)
-        model = Gtk.ListStore(*(Machine.get_column_types()))
 
+        model = Gtk.ListStore(*(Machine.get_column_types()))
         for machine in machines:
             row = []
             for column in Machine.get_column_names():
